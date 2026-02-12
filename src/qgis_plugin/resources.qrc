@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/plugins/IOT_DT_Module" >
+        <file>icon.png</file>
+    </qresource>
+</RCC>
