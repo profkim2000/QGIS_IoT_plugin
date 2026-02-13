@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>406</width>
+    <width>675</width>
     <height>300</height>
    </rect>
   </property>
@@ -16,8 +16,8 @@
   <widget class="QDialogButtonBox" name="button_box">
    <property name="geometry">
     <rect>
-     <x>30</x>
-     <y>240</y>
+     <x>300</x>
+     <y>250</y>
      <width>341</width>
      <height>32</height>
     </rect>
@@ -26,15 +26,15 @@
     <enum>Qt::Horizontal</enum>
    </property>
    <property name="standardButtons">
-    <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+    <set>QDialogButtonBox::Ok</set>
    </property>
   </widget>
   <widget class="QLabel" name="mylabel">
    <property name="geometry">
     <rect>
-     <x>10</x>
-     <y>120</y>
-     <width>391</width>
+     <x>20</x>
+     <y>80</y>
+     <width>631</width>
      <height>51</height>
     </rect>
    </property>
@@ -42,14 +42,36 @@
     <string>데이터 가져오는 중...</string>
    </property>
   </widget>
-  <widget class="QTextEdit" name="textEdit">
+  <widget class="QPushButton" name="btnStart">
    <property name="geometry">
     <rect>
-     <x>20</x>
-     <y>20</y>
-     <width>104</width>
-     <height>71</height>
+     <x>250</x>
+     <y>180</y>
+     <width>91</width>
+     <height>41</height>
     </rect>
+   </property>
+   <property name="toolTip">
+    <string>IoT 센서 데이터를 가져오기 시작합니다.</string>
+   </property>
+   <property name="text">
+    <string>시작</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="btnStop">
+   <property name="geometry">
+    <rect>
+     <x>360</x>
+     <y>180</y>
+     <width>81</width>
+     <height>41</height>
+    </rect>
+   </property>
+   <property name="toolTip">
+    <string>데이터 갱신을 잠시 멈춥니다</string>
+   </property>
+   <property name="text">
+    <string>멈춤</string>
    </property>
   </widget>
  </widget>

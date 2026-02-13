@@ -73,6 +73,8 @@ class IOT_DT:
         # Must be set in initGui() to survive plugin reloads
         self.first_start = None
 
+        self.socket = None
+
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
         """Get the translation for a string using Qt translation API.
@@ -198,11 +200,11 @@ class IOT_DT:
 
             self.dlg = IOT_DTDialog()
 
-            # UDP 통신데이터를 받을 준비
-            self.socket = QUdpSocket()
-            self.socket.bind(QHostAddress.LocalHost, 15551)
-            self.socket.readyRead.connect(self.on_udp_data)
-
+            # UI 버튼 이벤트 연결
+            self.dlg.btnStart.clicked.connect(self.on_btnStart_clicked)
+            self.dlg.btnStop.clicked.connect(self.on_btnStop_clicked)
+    
+            # 레이어 초기화
             self.setup_temp_layer()
 
 
@@ -217,10 +219,12 @@ class IOT_DT:
             # substitute with your code.
             pass
 
+    # UDP로 받아온 json을 파싱해 지도를 업데이트 한다.
     def update_ui(self, message) :
         #QgsMessageLog.logMessage("update_ui", "IOT_DT_Module", Qgis.Info)
         self.dlg.mylabel.setText(message)
 
+        # json 자료 파싱.
         try:
             data = json.loads(message)
             
@@ -235,34 +239,34 @@ class IOT_DT:
             
             #QgsMessageLog.logMessage(f"lat={lat}, lon={lon}, temp={temp}", "UDP_Plugin", Qgis.Warning)
             
-            # 3. 레이어에 점(Feature) 추가
+            # 레이어에 점(Feature) 추가
             feat = QgsFeature(self.mem_layer.fields())
             # 위경도 좌표계(EPSG:4326) 기준: x=경도(lon), y=위도(lat)
             feat.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(float(lon), float(lat))))
             feat.setAttribute("temperature", float(temp))
             feat.setAttribute("Humidity", float(Humidity))
             
-            # 4. 레이어 데이터 소스에 반영
+            # 레이어 데이터 소스에 반영
             provider = self.mem_layer.dataProvider()
             provider.truncate() # 기존 피처 삭제
             provider.addFeatures([feat])
             
-            # 5. 실시간 반영을 위한 리페인트
+            # 실시간 반영을 위한 리페인트
             self.mem_layer.triggerRepaint()
             
         except json.JSONDecodeError:
             QgsMessageLog.logMessage(f"잘못된 JSON 형식: {message}", "UDP_Plugin", Qgis.Critical)
         except Exception as e:
-            QgsMessageLog.logMessage(f"업데이트 오류: {str(e)}", "UDP_Plugin", Qgis.Critical)
+            QgsMessageLog.logMessage(f"오류: {str(e)}", "UDP_Plugin", Qgis.Critical)
 
 
         
 
     # 이 코드는 안 쓰고 있다.
-    def on_dialog_close(self, result) :
-        QgsMessageLog.logMessage(f"다이얼로그 닫는 중. 결과 코드: {result}", "IOT_DT_Module", Qgis.Info)
-        self.socket.close()
-        self.socket.readyRead.disconnect()
+    # def on_dialog_close(self, result) :
+    #     QgsMessageLog.logMessage(f"다이얼로그 닫는 중. 결과 코드: {result}", "IOT_DT_Module", Qgis.Info)
+    #     self.socket.close()
+    #     self.socket.readyRead.disconnect()
         
 
 
@@ -271,11 +275,8 @@ class IOT_DT:
             datagram, host, port = self.socket.readDatagram(self.socket.pendingDatagramSize())
 
             try:
-                #raw_bytes = datagram.data()
-                #message = raw_bytes.decode('utf-8')
                 message = datagram.decode('utf-8')
                 QgsMessageLog.logMessage(f"수신된 문자열: {message}", "IOT_DT_Module", Qgis.Info)
-                #self.dlg.mylabel.setText(message)
                 self.update_ui(message)
 
             except UnicodeDecodeError:
@@ -304,7 +305,7 @@ class IOT_DT:
         provider.addAttributes(fields)        
         self.mem_layer.updateFields()
 
-        # 프로젝트에 추가
+        # 레이어를 프로젝트에 추가
         QgsProject.instance().addMapLayer(self.mem_layer)
         
         # 레이어 스타일 설정 (라벨에 온도 표시)
@@ -323,7 +324,7 @@ class IOT_DT:
         settings.fieldName = expression
         settings.isExpression = True
         
-        # 텍스트 포맷 설정 (글자 크기, 색상 등)
+        # 텍스트 포맷 설정 (글자 크기, 색상)
         text_format = QgsTextFormat()
         text_format.setSize(14)
         settings.setFormat(text_format)
@@ -332,3 +333,25 @@ class IOT_DT:
         self.mem_layer.setLabeling(QgsVectorLayerSimpleLabeling(settings))
         self.mem_layer.setLabelsEnabled(True)
         self.mem_layer.triggerRepaint()        
+
+
+    # UI의 시작 버튼을 누른 이벤트 처리
+    def on_btnStart_clicked(self) :
+        QgsMessageLog.logMessage("시작 버튼 누름", "IOT_DT_Module", Qgis.Info)
+        if None == self.socket :
+            QgsMessageLog.logMessage("UDP 재시작", "IOT_DT_Module", Qgis.Info)
+            self.socket = QUdpSocket()
+            self.socket.bind(QHostAddress.LocalHost, 15551)            
+
+        QgsMessageLog.logMessage("시작 버튼 누름2", "IOT_DT_Module", Qgis.Info)
+        self.socket.readyRead.connect(self.on_udp_data)
+        QgsMessageLog.logMessage("시작 버튼 누름3", "IOT_DT_Module", Qgis.Info)
+    
+    # UI의 멈춤 버튼을 누른 이벤트 처리
+    def on_btnStop_clicked(self) :
+        QgsMessageLog.logMessage("멈춤 버튼 누름", "IOT_DT_Module", Qgis.Info)
+        self.socket.close()
+        self.socket.readyRead.disconnect()
+        self.socket = None
+    
+        
