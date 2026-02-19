@@ -38,6 +38,11 @@ from .IOT_DT_Module_dialog import IOT_DTDialog
 import os.path
 import json
 
+#from .mapCanvas import MapCanvas
+#from .mapCanvas import CompassRoseItem
+from .mapCanvas import CanvasImageItem
+
+
 class IOT_DT:
     """QGIS Plugin Implementation."""
 
@@ -72,8 +77,17 @@ class IOT_DT:
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
         self.first_start = None
-
         self.socket = None
+
+        self.canvas = iface.mapCanvas()        
+
+        #canvas = iface.mapCanvas()
+        
+        # 전역 변수나 클래스 멤버로 유지해야 이미지가 사라지지 않습니다.
+        #self.image_item = CanvasImageItem(canvas, center_point, image_path)
+        #self.image_item.show()
+
+
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -178,6 +192,9 @@ class IOT_DT:
         # will be set False in run()
         self.first_start = True
 
+        # 종료될 떄 받을 이벤트 연결
+        QCoreApplication.instance().aboutToQuit.connect(self.on_qgis_about_to_quit)
+
 
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
@@ -203,9 +220,16 @@ class IOT_DT:
             # UI 버튼 이벤트 연결
             self.dlg.btnStart.clicked.connect(self.on_btnStart_clicked)
             self.dlg.btnStop.clicked.connect(self.on_btnStop_clicked)
-    
-            # 레이어 초기화
-            self.setup_temp_layer()
+
+            # 온습도 레이어 초기화
+            self.setup_mem_layer()
+
+            # 불꽃 감지 등 표시하는 레이어 초기화
+            #self.setup_map_canvas()
+            # self.map_canvas.setPos(14000000.0, 4300000.0)
+
+            # 사용
+            
 
 
         # show the dialog
@@ -222,6 +246,16 @@ class IOT_DT:
     # UDP로 받아온 json을 파싱해 지도를 업데이트 한다.
     def update_ui(self, message) :
         #QgsMessageLog.logMessage("update_ui", "IOT_DT_Module", Qgis.Info)
+        if "ERASE_DATA" == message:
+            provider = self.mem_layer.dataProvider()
+
+            if provider:
+                provider.truncate() # 기존 피처 삭제
+                self.mem_layer.triggerRepaint()
+
+            return
+        
+
         self.dlg.mylabel.setText(message)
 
         # json 자료 파싱.
@@ -232,12 +266,13 @@ class IOT_DT:
             lon = data.get('lon')
             temp = data.get('Temp')
             Humidity = data.get('Humidity')
+            flame: int = data.get('FLAME')
 
             if lat is None or lon is None or temp is None:
                 QgsMessageLog.logMessage("JSON에 키가 없어서 넘어감.", "IOT_DT_Module", Qgis.Warning)
                 return
             
-            #QgsMessageLog.logMessage(f"lat={lat}, lon={lon}, temp={temp}", "UDP_Plugin", Qgis.Warning)
+            QgsMessageLog.logMessage(f"lat={lat}, lon={lon}, temp={temp}, flame={flame}", "자료 분석", Qgis.Info)
             
             # 레이어에 점(Feature) 추가
             feat = QgsFeature(self.mem_layer.fields())
@@ -253,6 +288,23 @@ class IOT_DT:
             
             # 실시간 반영을 위한 리페인트
             self.mem_layer.triggerRepaint()
+
+            # flame 처리
+            if 1 == flame :
+                QgsMessageLog.logMessage("불꽃감지", "IOT_DT_Module", Qgis.Warning)
+                
+                pos = QgsPointXY(lon, lat)
+                src_epsg = 4326
+                target_epsg = 3857
+                erase_others = True
+
+                global_image_item = CanvasImageItem(self.canvas, pos, src_epsg, target_epsg, erase_others)
+                global_image_item.show()
+
+                # 화면 강제 갱신
+                self.canvas.refresh()
+
+
             
         except json.JSONDecodeError:
             QgsMessageLog.logMessage(f"잘못된 JSON 형식: {message}", "UDP_Plugin", Qgis.Critical)
@@ -289,10 +341,10 @@ class IOT_DT:
 
 
     # 메모리 레이어 초기화
-    def setup_temp_layer(self):
+    def setup_mem_layer(self):
         # 'Point' 타입의 메모리 레이어 생성 (EPSG:4326)
         uri = "Point?crs=epsg:4326"
-        self.mem_layer = QgsVectorLayer(uri, "UDP_Temperature_Points", "memory")
+        self.mem_layer = QgsVectorLayer(uri, "온습도", "memory")
         
         # 필드 설정 (온도 값을 저장할 공간)
         provider = self.mem_layer.dataProvider()
@@ -346,12 +398,21 @@ class IOT_DT:
         QgsMessageLog.logMessage("시작 버튼 누름2", "IOT_DT_Module", Qgis.Info)
         self.socket.readyRead.connect(self.on_udp_data)
         QgsMessageLog.logMessage("시작 버튼 누름3", "IOT_DT_Module", Qgis.Info)
+
+        self.dlg.mylabel.setText("데이터 가져오는 중...")
     
     # UI의 멈춤 버튼을 누른 이벤트 처리
     def on_btnStop_clicked(self) :
         QgsMessageLog.logMessage("멈춤 버튼 누름", "IOT_DT_Module", Qgis.Info)
-        self.socket.close()
-        self.socket.readyRead.disconnect()
-        self.socket = None
-    
-        
+
+        if (self.socket) :
+            self.socket.close()
+            self.socket.readyRead.disconnect()
+            self.socket = None
+        self.update_ui("ERASE_DATA")
+
+
+    # QGIS 종료 처리
+    def on_qgis_about_to_quit(self) :
+        # UI의 멈춤 버튼을 누른 처리
+        self.on_btnStop_clicked()

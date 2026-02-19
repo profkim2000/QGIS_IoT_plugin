@@ -39,7 +39,7 @@
     </rect>
    </property>
    <property name="text">
-    <string>데이터 가져오는 중...</string>
+    <string/>
    </property>
   </widget>
   <widget class="QPushButton" name="btnStart">
